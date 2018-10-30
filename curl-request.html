@@ -1,0 +1,302 @@
+<link rel="import" href="../polymer/polymer-element.html">
+<dom-module id="curl-request">
+  <script>
+  /**
+   * `curl-request`
+   *
+   * A component that transforms cURL command to ARC request object
+   *
+   * ## Styling
+   *
+   * `<curl-request>` provides the following custom properties and mixins for styling:
+   *
+   * Custom property | Description | Default
+   * ----------------|-------------|----------
+   * `--curl-request` | Mixin applied to this elment | `{}`
+   *
+   * @customElement
+   * @polymer
+   * @demo demo/index.html
+   * @memberof ApiElements
+   */
+  class CurlRequest extends Polymer.Element {
+    static get is() {
+      return 'curl-request';
+    }
+    static get properties() {
+      return {
+        command: {type: String, observer: '_autoGen'},
+        request: {type: Object, notify: true, readOnly: true}
+      };
+    }
+    /**
+     * Generates the value for `request` when `command` change.
+     * This function sets value for rhe `request` property.
+     * @param {String} value cURL command value
+     */
+    _autoGen(value) {
+      if (!value) {
+        this._setRequest(undefined);
+        return;
+      }
+      try {
+        const request = this.generate(value);
+        this._setRequest(request);
+      } catch (e) {
+        console.warn(e);
+        this._setRequest(undefined);
+      }
+    }
+    /**
+     * Generates ARC request object from cURL command.
+     * @param {String} value cURL command value.
+     * @return {Object} ARC request object
+     */
+    generate(value) {
+      const result = {
+        method: 'GET',
+        headers: [],
+        config: {}
+      };
+      value = this._prepareCommand(value);
+      const opts = this._prepareOptions(value);
+      result.url = opts.url;
+      const options = this._canonicalOptions(opts.options);
+      this._processOptions(options, result);
+      this._processHeadersPost(result);
+      return result;
+    }
+    /**
+     * Prepares command value. Removes any of `$ curl` from the command so
+     * the remaining is command arguments.
+     * This throws error if the command is not a valid cURL comamnd (eg. doesn't
+     * contain "curl" prefix).
+     * @param {String} value Command passed to `generate()` function.
+     * @return {String} Command arguments
+     * @throws {Error} An error when passed value is not cURL command
+     */
+    _prepareCommand(value) {
+      value = value.replace(/\\\s?\n/g, '');
+      if (value.substr(0, 2) === '$ ') {
+        value = value.substr(2);
+      }
+      let isCurl = false;
+      let start = value.substr(0, 4).toLowerCase();
+      if (start === 'curl') {
+        value = value.substr(5);
+        isCurl = true;
+      }
+      if (!isCurl) {
+        start = value.substr(0, 3).toLowerCase();
+        if (start === 'url') {
+          // in case of not coppying the beginning of the command.
+          // Sometimes it happens...
+          value = value.substr(4);
+          isCurl = true;
+        }
+      }
+      if (!isCurl || !value) {
+        throw new Error('Passed command is not valid cURL command');
+      }
+      return value;
+    }
+    /**
+     * Reads command as a list of options.
+     * @param {String} value Passed command
+     * @return {Object} An object containing `url` as a string property and
+     * `options` as an array of object where each item has `name` and `value`
+     * properties. The `value` property can be undefined.
+     */
+    _prepareOptions(value) {
+      let i = 0;
+      let state = 0;
+      const result = {
+        url: '',
+        options: []
+      };
+      let optName;
+      let optValue;
+      let inQuote = false;
+      while (true) {
+        const ch = value[i];
+        i++;
+        if (ch === undefined) {
+          if (optName) {
+            result.options.push({
+              name: optName,
+              value: optValue
+            });
+          }
+          break;
+        }
+        if (state === 4 && ch === ' ') {
+          state = 0;
+          continue;
+        }
+        if ((!ch || ch === ' ') && state !== 2) {
+          if (state === 1) {
+            state = 2;
+          }
+          continue;
+        }
+        if (ch === '-' && state === 0) {
+          state = 1; // reading option name
+          continue;
+        }
+        if (ch === '-' && state === 1 && !optName) {
+          continue;
+        }
+        if (ch === '-' && state === 2 && !optValue) {
+          result.options.push({
+            name: optName,
+            value: optValue
+          });
+          optName = undefined;
+          optValue = undefined;
+          state = 1;
+          continue;
+        }
+        if (ch === '=' && state === 1) {
+          state = 2;
+          continue;
+        }
+        if (state === 1) {
+          if (!optName) {
+            optName = '';
+          }
+          optName += ch;
+          continue;
+        }
+        if (state === 2) {
+          if (ch === '"') {
+            if (inQuote) {
+              state = 0;
+              inQuote = false;
+              result.options.push({
+                name: optName,
+                value: optValue
+              });
+              optName = undefined;
+              optValue = undefined;
+            } else {
+              inQuote = true;
+            }
+            continue;
+          } else if (ch === ' ' && !inQuote) {
+            state = 0;
+            result.options.push({
+              name: optName,
+              value: optValue
+            });
+            optName = undefined;
+            optValue = undefined;
+            continue;
+          }
+          if (!optValue) {
+            optValue = '';
+          }
+          optValue += ch;
+          continue;
+        }
+        if (state === 0 || state === 4) {
+          result.url += ch;
+          if (state !== 4) {
+            state = 4;
+          }
+        }
+      }
+      return result;
+    }
+    /**
+     * Contains mapping of short option notation to long name.
+     * @return {Object}
+     */
+    get optionsMap() {
+      return {
+        'A': 'user-agent',
+        'b': 'cookie',
+        'c': 'cookie-jar',
+        'd': 'data',
+        'F': 'form',
+        'k': 'insecure',
+        'm': 'max-time',
+        'o': 'output',
+        'O': 'remote-name',
+        's': 'silent',
+        'T': 'upload-file',
+        'I': 'head',
+        'u': 'user',
+        'w': 'write-out',
+        'x': 'proxy',
+        'H': 'header',
+        'L': 'location',
+        'v': 'verbose'
+      };
+    }
+    /**
+     * @return {Array<String>} Returns list of options that has no value.
+     */
+    get voidOptions() {
+      return ['compressed', 'insecure', 'silent', 'head', 'location', 'verbose'];
+    }
+    /**
+     * Creates a cannonical form of options. Replaces shortcut options with it's
+     * full name. Removes values from void options.
+     * @param {Array<Object>} opts Parsed options.
+     * @return {Array<Object>} Processed options.
+     */
+    _canonicalOptions(opts) {
+      if (!opts.length) {
+        return [];
+      }
+      const map = this.optionsMap;
+      const v = this.voidOptions;
+      for (let i = 0, len = opts.length; i < len; i++) {
+        const name = opts[i].name;
+        if (name in map) {
+          opts[i].name = map[name];
+        }
+        if (opts[i].value !== undefined && v.indexOf(opts[i].name) !== -1) {
+          opts[i].value = undefined;
+        }
+      }
+      return opts;
+    }
+
+    _processOptions(options, target) {
+      options.forEach((item) => this._addOption(item, target));
+    }
+    /**
+     * Applies an option to the request object.
+     * @param {Object} item Option with `name` and `value` properties.
+     * @param {Object} target ARC request object.
+     */
+    _addOption(item, target) {
+      const v = item.value;
+      switch (item.name) {
+        case 'user-agent':
+        case 'cookie':
+          this._appendHeader(target.headers, item.name, v);
+          break;
+        case 'cookie-jar':
+          target.config.cookieJar = v;
+          break;
+      }
+    }
+
+    _replaceHeader(headers, name, value) {
+
+    }
+
+    _appendHeader(headers, name, value) {
+
+    }
+
+    _processHeadersPost(result) {
+      const h = result.headers;
+      result.headers = h.join('\n');
+    }
+  }
+  window.customElements.define(CurlRequest.is, CurlRequest);
+  </script>
+</dom-module>

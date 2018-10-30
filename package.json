@@ -1,0 +1,29 @@
+{
+  "name": "@api-components/curl-request",
+  "description": "A component that transforms cURL command to ARC request object",
+  "version": "2.0.0-preview",
+  "license": "Apache-2.0",
+  "main": "curl-request.html",
+  "authors": [
+    "Pawel Psztyc",
+    "The Advanced REST client authors <arc@mulesoft.com>"
+  ],
+  "devDependencies": {
+    "@polymer/gen-typescript-declarations": "^1.1.1"
+  },
+  "private": false,
+  "scripts": {
+    "lint": "polymer lint curl-request.html",
+    "test-sauce": "polymer test --plugin sauce --job-name \"curl-request:local-test\"",
+    "test": "polymer test --plugin local",
+    "update-types": "gen-typescript-declarations --deleteExisting --outDir ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/advanced-rest-client/curl-request.git"
+  },
+  "bugs": {
+    "url": "https://github.com/advanced-rest-client/curl-request/issues",
+    "email": "arc@mulesoft.com"
+  }
+}

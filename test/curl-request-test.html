@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, minimum-scale=1, initial-scale=1, user-scalable=yes">
+  <title>curl-request test</title>
+  <script src="../../webcomponentsjs/webcomponents-loader.js"></script>
+  <script src="../../web-component-tester/browser.js"></script>
+  <link rel="import" href="../curl-request.html">
+</head>
+<body>
+  <test-fixture id="Basic">
+    <template>
+      <curl-request></curl-request>
+    </template>
+  </test-fixture>
+
+  <script>
+  suite('curl-request', () => {
+    suite('_prepareCommand()', () => {
+      const v1 = `$ curl http://www.tutorialspoint.com/unix/ \\
+        --limit-rate 1k \\
+        -o unix.html`;
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Creates single line command', () => {
+        const result = element._prepareCommand(v1);
+        const match = result.match(/\n/g);
+        assert.notOk(match);
+      });
+
+      test('Removes dollar sign', () => {
+        const result = element._prepareCommand(v1);
+        const index = result.indexOf('$');
+        assert.equal(index, -1);
+      });
+
+      test('Removes curl command', () => {
+        const result = element._prepareCommand(v1);
+        const index = result.indexOf('curl');
+        assert.equal(index, -1);
+      });
+
+      test('Allows "url" command', () => {
+        const result = element._prepareCommand('url https://domain.com');
+        assert.equal(result, 'https://domain.com');
+      });
+
+      test('Ignores command case', () => {
+        const result = element._prepareCommand('cURL https://domain.com');
+        assert.equal(result, 'https://domain.com');
+      });
+
+      test('Throws error when curl is not in the command', () => {
+        assert.throws(() => {
+          element._prepareCommand('https://domain.com');
+        });
+      });
+
+      test('Throws error when no arguments', () => {
+        assert.throws(() => {
+          element._prepareCommand('curl ');
+        });
+      });
+    });
+
+    suite('_prepareOptions()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Parses URL only', () => {
+        const result = element._prepareOptions('https://domain.com');
+        assert.typeOf(result, 'object');
+        assert.lengthOf(result.options, 0);
+        assert.equal(result.url, 'https://domain.com');
+      });
+
+      test('Parses single option - after url', () => {
+        const result = element._prepareOptions('https://domain.com --location');
+        assert.equal(result.url, 'https://domain.com');
+        assert.lengthOf(result.options, 1);
+        const option = result.options[0];
+        assert.equal(option.name, 'location');
+        assert.isUndefined(option.value);
+      });
+
+      test('Parses option with value - after url, no quotes', () => {
+        const result = element._prepareOptions('https://domain.com --limit-rate 1k');
+        assert.equal(result.url, 'https://domain.com');
+        assert.lengthOf(result.options, 1);
+        const option = result.options[0];
+        assert.equal(option.name, 'limit-rate');
+        assert.equal(option.value, '1k');
+      });
+
+      test('Parses option with value - after url, with quotes', () => {
+        const result = element._prepareOptions('https://domain.com --limit-rate "1k test"');
+        assert.equal(result.url, 'https://domain.com');
+        assert.lengthOf(result.options, 1);
+        const option = result.options[0];
+        assert.equal(option.name, 'limit-rate');
+        assert.equal(option.value, '1k test');
+      });
+
+      test('Parses options with value - after url, with quotes and equality sign', () => {
+        const result = element._prepareOptions('https://domain.com --limit-rate="1k test"');
+        assert.equal(result.url, 'https://domain.com');
+        assert.lengthOf(result.options, 1);
+        const option = result.options[0];
+        assert.equal(option.name, 'limit-rate');
+        assert.equal(option.value, '1k test');
+      });
+
+      test('Parses options with value - after url, with equality sign', () => {
+        const result = element._prepareOptions('https://domain.com --limit-rate=1k');
+        assert.equal(result.url, 'https://domain.com');
+        assert.lengthOf(result.options, 1);
+        const option = result.options[0];
+        assert.equal(option.name, 'limit-rate');
+        assert.equal(option.value, '1k');
+      });
+
+      test('Multiple options with values - after url, with equality sign', () => {
+        const result = element._prepareOptions('https://domain.com --limit-rate=1k -x proxy.example.com:3128 --output="path/to/file" --form "name=content"');
+        assert.equal(result.url, 'https://domain.com');
+        assert.lengthOf(result.options, 4);
+        let option = result.options[0];
+        assert.equal(option.name, 'limit-rate');
+        assert.equal(option.value, '1k');
+        option = result.options[1];
+        assert.equal(option.name, 'x');
+        assert.equal(option.value, 'proxy.example.com:3128');
+        option = result.options[2];
+        assert.equal(option.name, 'output');
+        assert.equal(option.value, 'path/to/file');
+        option = result.options[3];
+        assert.equal(option.name, 'form');
+        assert.equal(option.value, 'name=content');
+      });
+
+      test('Multiple simple options - after url, with equality sign', () => {
+        const result = element._prepareOptions('https://domain.com --insecure -O --compressed -s');
+        assert.lengthOf(result.options, 4);
+        let option = result.options[0];
+        assert.equal(option.name, 'insecure');
+        assert.isUndefined(option.value);
+        option = result.options[1];
+        assert.equal(option.name, 'O');
+        assert.isUndefined(option.value);
+        option = result.options[2];
+        assert.equal(option.name, 'compressed');
+        assert.isUndefined(option.value);
+        option = result.options[3];
+        assert.equal(option.name, 's');
+        assert.isUndefined(option.value);
+      });
+
+      test('Multiple mixed options - after url, with equality sign', () => {
+        const result = element._prepareOptions('https://domain.com --insecure --limit-rate=1k -O --output="path/to/file"');
+        assert.lengthOf(result.options, 4);
+        let option = result.options[0];
+        assert.equal(option.name, 'insecure');
+        assert.isUndefined(option.value);
+        option = result.options[1];
+        assert.equal(option.name, 'limit-rate');
+        assert.equal(option.value, '1k');
+        option = result.options[2];
+        assert.equal(option.name, 'O');
+        assert.isUndefined(option.value);
+        option = result.options[3];
+        assert.equal(option.name, 'output');
+        assert.equal(option.value, 'path/to/file');
+      });
+
+      test('URL after option with value - quotes', () => {
+        const result = element._prepareOptions('--output="test" https://domain.com');
+        assert.equal(result.url, 'https://domain.com');
+        assert.lengthOf(result.options, 1);
+        let option = result.options[0];
+        assert.equal(option.name, 'output');
+        assert.equal(option.value, 'test');
+      });
+
+      test('URL with dash', () => {
+        const result = element._prepareOptions('--output="test" https://domain.com/my-path');
+        assert.equal(result.url, 'https://domain.com/my-path');
+        assert.lengthOf(result.options, 1);
+        let option = result.options[0];
+        assert.equal(option.name, 'output');
+        assert.equal(option.value, 'test');
+      });
+
+      test('URL with dash - url first', () => {
+        const result = element._prepareOptions('https://domain.com/my-path --output="test"');
+        assert.equal(result.url, 'https://domain.com/my-path');
+        assert.lengthOf(result.options, 1);
+        let option = result.options[0];
+        assert.equal(option.name, 'output');
+        assert.equal(option.value, 'test');
+      });
+    });
+
+    suite('_canonicalOptions()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Replaces short notation with full name', () => {
+        const opts = [{
+          name: 'A'
+        }, {
+          name: 'T'
+        }];
+        element._canonicalOptions(opts);
+        assert.equal(opts[0].name, 'user-agent');
+        assert.equal(opts[1].name, 'upload-file');
+      });
+
+      test('Keeps full names', () => {
+        const opts = [{
+          name: 'compressed',
+          value: true
+        }, {
+          name: 'k',
+          value: 'test'
+        }];
+        element._canonicalOptions(opts);
+        assert.isUndefined(opts[0].value);
+        assert.isUndefined(opts[1].value);
+      });
+
+      test('Removes values from void type options', () => {
+        const opts = [{
+          name: 'A'
+        }, {
+          name: 'T'
+        }];
+        element._canonicalOptions(opts);
+        assert.equal(opts[0].name, 'user-agent');
+        assert.equal(opts[1].name, 'upload-file');
+      });
+    });
+  });
+  </script>
+</body>
+</html>
