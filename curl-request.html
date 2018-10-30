@@ -4,20 +4,12 @@
   /**
    * `curl-request`
    *
-   * A component that transforms cURL command to ARC request object
-   *
-   * ## Styling
-   *
-   * `<curl-request>` provides the following custom properties and mixins for styling:
-   *
-   * Custom property | Description | Default
-   * ----------------|-------------|----------
-   * `--curl-request` | Mixin applied to this elment | `{}`
+   * A component that transforms cURL command to ARC request object.
    *
    * @customElement
    * @polymer
    * @demo demo/index.html
-   * @memberof ApiElements
+   * @memberof LogicElements
    */
   class CurlRequest extends Polymer.Element {
     static get is() {
@@ -217,6 +209,8 @@
         'b': 'cookie',
         'c': 'cookie-jar',
         'd': 'data',
+        'D': 'dump-header',
+        'E': 'cert',
         'F': 'form',
         'k': 'insecure',
         'm': 'max-time',
@@ -281,20 +275,97 @@
         case 'cookie-jar':
           target.config.cookieJar = v;
           break;
+        case 'dump-header':
+          target.config.dumpHeader = v;
+          break;
+        case 'crlfile':
+          target.config[item.name] = v;
+          break;
+        case 'data-ascii':
+        case 'data-binary':
+        case 'data':
+          target.config.expectFilePayload = true;
+          target.payload = v;
+          break;
+        case 'data-raw':
+          target.config.expectFilePayload = false;
+          target.payload = v;
+          break;
+        case 'data-urlencode':
+          target.config.expectFilePayload = true;
+          target.payload = this._appendUrlEncode(v, target.payload);
+          this._replaceHeader(target.headers, 'content-type', 'application/x-www-form-urlencoded');
+          break;
+        case 'digest':
+          target.auth = {
+            type: 'digest'
+          };
+          break;
+        case 'form':
+          this._appendMultipart(target);
+          break;
       }
     }
 
     _replaceHeader(headers, name, value) {
-
+      this.__updateHeader(headers, name, value, true);
     }
 
     _appendHeader(headers, name, value) {
+      this.__updateHeader(headers, name, value);
+    }
 
+    __updateHeader(headers, name, value, override) {
+      for (let i = 0, len = headers.length; i < len; i++) {
+        if (headers[i][0].toLowerCase() === name.toLowerCase()) {
+          if (override) {
+            headers[i][1] = value;
+          } else {
+            headers[i][1] += '; ' + value;
+          }
+          return;
+        }
+      }
+      headers.push([name, value]);
     }
 
     _processHeadersPost(result) {
       const h = result.headers;
-      result.headers = h.join('\n');
+      result.headers = h.map((item) => item[0] + ': ' + item[1]).join('\n');
+    }
+    /**
+     * Creates a URL encoded payload.
+     * @param {String} value Configuration options. See cURL man page for
+     * `--data-urlencode` option.
+     * @param {Stirng|undefined} target Previously added data. Note, it won't
+     * check for the data type before appening URL encoded data.
+     * @return {String} Payload with url encoded data.
+     */
+    _appendUrlEncode(value, target) {
+      if (!value) {
+        return target;
+      }
+      target = target || '';
+      if (target) {
+        target += '&';
+      }
+      if (value[0] === '=') {
+        return target + encodeURIComponent(value.substr(1));
+      }
+      if (value.indexOf('@') !== -1) {
+        return target + value;
+      }
+      if (value.indexOf('=') !== -1) {
+        const parts = value.split('=');
+        return target + parts[0] + '=' + encodeURIComponent(parts[1]);
+      }
+      return target + encodeURIComponent(value);
+    }
+
+    _appendMultipart(target) {
+      if (!target.multipart) {
+        target.multipart = [];
+      }
     }
   }
   window.customElements.define(CurlRequest.is, CurlRequest);
