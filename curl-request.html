@@ -383,12 +383,14 @@
      * @return {Object} Object with `username` and optional `password` properties.
      */
     _processUser(value) {
-      const parts = value.split(':');
-      const result = {
-        username: parts[0]
-      };
-      if (parts[1]) {
-        result.password = parts[1];
+      value = String(value);
+      const index = value.indexOf(':');
+      const result = {};
+      if (index === -1) {
+        result.username = value;
+      } else {
+        result.username = value.substr(0, index);
+        result.password = value.substr(index + 1);
       }
       return result;
     }
@@ -416,14 +418,14 @@
       const index = value.indexOf(':');
       if (index === -1) {
         if (value.indexOf(';') !== -1) {
-          this._replaceHeader(headers, value, '');
+          this._replaceHeader(headers, value.replace(';', '').trim(), '');
           return;
         } else {
           this._removeHeader(headers, value);
         }
       } else {
         const name = value.substr(0, index);
-        value = value.substr(index + 1);
+        value = value.substr(index + 1).trim();
         this._replaceHeader(headers, name, value);
       }
     }
@@ -471,14 +473,18 @@
           if (override) {
             headers[i][1] = value;
           } else {
-            headers[i][1] += '; ' + value;
+            headers[i][1] += ', ' + value;
           }
           return;
         }
       }
       headers.push([name, value]);
     }
-
+    /**
+     * Processes headers when all options are processed and final list of headers
+     * is known.
+     * @param {Object} result ARC request object
+     */
     _processHeadersPost(result) {
       const h = result.headers;
       result.headers = h.map((item) => item[0] + ': ' + item[1]).join('\n');

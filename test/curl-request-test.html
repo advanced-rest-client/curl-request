@@ -246,6 +246,186 @@
         assert.equal(opts[1].name, 'upload-file');
       });
     });
+
+    suite('_processUser()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      const USER = 'test';
+      const USERPASSWD = 'uname:passwd';
+
+      test('Returns an object', () => {
+        const result = element._processUser(USER);
+        assert.typeOf(result, 'object');
+      });
+
+      test('Returns username as passed value', () => {
+        const result = element._processUser(USER);
+        assert.equal(result.username, USER);
+      });
+
+      test('Password is undefined when not set', () => {
+        const result = element._processUser(USER);
+        assert.isUndefined(result.password);
+      });
+
+      test('Returns username as when password is set', () => {
+        const result = element._processUser(USERPASSWD);
+        assert.equal(result.username, 'uname');
+      });
+
+      test('Returns password', () => {
+        const result = element._processUser(USERPASSWD);
+        assert.equal(result.password, 'passwd');
+      });
+    });
+
+    suite('_addAuthProperty()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+      let obj;
+      setup(() => {
+        obj = {};
+      });
+
+      test('Creates an `auth` object', () => {
+        element._addAuthProperty(obj, 'a', 'b');
+        assert.typeOf(obj.auth, 'object');
+      });
+
+      test('Adds property to the "auth"', () => {
+        element._addAuthProperty(obj, 'a', 'b');
+        assert.notEqual(typeof obj.auth.a, 'undefined');
+      });
+
+      test('Adds value to the property', () => {
+        element._addAuthProperty(obj, 'a', 'b');
+        assert.equal(obj.auth.a, 'b');
+      });
+    });
+
+    suite('_appendHeaderString()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Adds header to the list', () => {
+        const result = [];
+        element._appendHeaderString(result, 'x-test: true');
+        assert.lengthOf(result, 1);
+        assert.equal(result[0][0], 'x-test');
+        assert.equal(result[0][1], 'true');
+      });
+
+      test('Adds empty header to the list', () => {
+        const result = [];
+        element._appendHeaderString(result, 'x-test;');
+        assert.lengthOf(result, 1);
+        assert.equal(result[0][0], 'x-test');
+        assert.equal(result[0][1], '');
+      });
+
+      test('Removes header from the list', () => {
+        const result = [['x-test', 'test']];
+        element._appendHeaderString(result, 'x-test');
+        assert.lengthOf(result, 0);
+      });
+    });
+
+    suite('_removeHeader()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Removes header from the list', () => {
+        const result = [['x-test', 'test']];
+        element._removeHeader(result, 'x-test');
+        assert.lengthOf(result, 0);
+      });
+
+      test('Does nothing when header is not set', () => {
+        const result = [['x-test', 'test']];
+        element._removeHeader(result, 'x-test-other');
+        assert.lengthOf(result, 1);
+      });
+    });
+
+    suite('_replaceHeader()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Replaces value of a header', () => {
+        const result = [['x-test', 'test']];
+        element._replaceHeader(result, 'x-test', 'other');
+        assert.equal(result[0][1], 'other');
+      });
+
+      test('Adds new if header is not set', () => {
+        const result = [['x-test', 'test']];
+        element._replaceHeader(result, 'x-test-2', 'other');
+        assert.lengthOf(result, 2);
+      });
+    });
+
+    suite('_appendHeader()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Adds value to the header', () => {
+        const result = [['x-test', 'test']];
+        element._appendHeader(result, 'x-test', 'other');
+        assert.equal(result[0][1], 'test, other');
+      });
+
+      test('Is case insensitive', () => {
+        const result = [['x-test', 'test']];
+        element._appendHeader(result, 'X-Test', 'other');
+        assert.equal(result[0][1], 'test, other');
+      });
+
+      test('Adds new if header is not set', () => {
+        const result = [['x-test', 'test']];
+        element._appendHeader(result, 'x-test-2', 'other');
+        assert.lengthOf(result, 2);
+      });
+    });
+
+    suite('_processHeadersPost()', () => {
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      test('Headers is string for empty list', () => {
+        const request = {headers: []};
+        element._processHeadersPost(request);
+        assert.equal(request.headers, '');
+      });
+
+      test('Returns single header', () => {
+        const request = {headers: [['x-test', 'test']]};
+        element._processHeadersPost(request);
+        assert.equal(request.headers, 'x-test: test');
+      });
+
+      test('Returns multiple headers', () => {
+        const request = {
+          headers: [['x-test', 'test'], ['x-other', 'other']]
+        };
+        element._processHeadersPost(request);
+        assert.equal(request.headers, 'x-test: test\nx-other: other');
+      });
+    });
   });
   </script>
 </body>
