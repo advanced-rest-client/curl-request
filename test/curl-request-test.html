@@ -426,6 +426,231 @@
         assert.equal(request.headers, 'x-test: test\nx-other: other');
       });
     });
+
+    suite('Command processing', () => {
+      const url = 'https://api.domain.com/path/';
+      let element;
+      suiteSetup(() => {
+        element = fixture('Basic');
+      });
+
+      [
+        [`curl ${url} -X "POST" -H "accept: */*" `, {
+          url,
+          method: 'POST',
+          headers: 'accept: */*',
+          config: {}
+        }],
+        [`curl ${url} -X "POST" -H "accept: */*" -H "content-type: my-type" `, {
+          url,
+          method: 'POST',
+          headers: 'accept: */*\ncontent-type: my-type',
+          config: {}
+        }],
+        [`curl ${url} -X "POST" -H "accept: */*" -H "accept: test" `, {
+          url,
+          method: 'POST',
+          headers: 'accept: */*, test',
+          config: {}
+        }],
+        [`curl ${url} -X "POST" --data "test-data"`, {
+          url,
+          method: 'POST',
+          headers: '',
+          payload: 'test-data',
+          config: {
+            expectFilePayload: true
+          }
+        }],
+        [`curl ${url} -X "POST" -d "test-data"`, {
+          url,
+          method: 'POST',
+          headers: '',
+          payload: 'test-data',
+          config: {
+            expectFilePayload: true
+          }
+        }],
+        [`curl ${url} -X "POST" --data-urlencode "unencoded data"`, {
+          url,
+          method: 'POST',
+          headers: 'content-type: application/x-www-form-urlencoded',
+          payload: 'unencoded%20data',
+          config: {
+            expectFilePayload: true
+          }
+        }],
+        [`curl ${url} -X "POST" --data-urlencode "=unencoded data"`, {
+          url,
+          method: 'POST',
+          headers: 'content-type: application/x-www-form-urlencoded',
+          payload: 'unencoded%20data',
+          config: {
+            expectFilePayload: true
+          }
+        }],
+        [`curl ${url} -X "POST" --data-urlencode "@unencoded data"`, {
+          url,
+          method: 'POST',
+          headers: 'content-type: application/x-www-form-urlencoded',
+          payload: '@unencoded data',
+          config: {
+            expectFilePayload: true
+          }
+        }],
+        [`curl ${url} -X "POST" --data-urlencode "test=unencoded data"`, {
+          url,
+          method: 'POST',
+          headers: 'content-type: application/x-www-form-urlencoded',
+          payload: 'test=unencoded%20data',
+          config: {
+            expectFilePayload: true
+          }
+        }],
+        [`curl ${url} --user-agent "x-test"`, {
+          url,
+          method: 'GET',
+          headers: 'user-agent: x-test',
+          config: {}
+        }],
+        [`curl ${url} --cookie "a=b"`, {
+          url,
+          method: 'GET',
+          headers: 'cookie: a=b',
+          config: {}
+        }],
+        [`curl ${url} --cookie "a=b" --cookie "c=d"`, {
+          url,
+          method: 'GET',
+          headers: 'cookie: a=b, c=d',
+          config: {}
+        }],
+        [`curl ${url} --cookie-jar "test"`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            cookieJar: 'test'
+          }
+        }],
+        [`curl ${url} --dump-header "file.txt"`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            dumpHeader: 'file.txt'
+          }
+        }],
+        [`curl ${url} --crlfile "file.txt"`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            crlfile: 'file.txt'
+          }
+        }],
+        [`curl ${url} --digest --user "a:b"`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {},
+          auth: {
+            type: 'digest',
+            username: 'a',
+            password: 'b'
+          }
+        }],
+        [`curl ${url} --head`, {
+          url,
+          method: 'HEAD',
+          headers: '',
+          config: {}
+        }],
+        [`curl ${url} --get --data-raw a=b`, {
+          url: url + '?a=b',
+          method: 'GET',
+          headers: '',
+          config: {
+            expectFilePayload: false
+          }
+        }],
+        [`curl ${url} --insecure`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            validateCertificates: false
+          }
+        }],
+        [`curl ${url} --key "key.pem"`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            ssl: {
+              key: 'key.pem'
+            }
+          }
+        }],
+        [`curl ${url} --key-type PEM`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            ssl: {
+              keyType: 'PEM'
+            }
+          }
+        }],
+        [`curl ${url} --max-redirs 2`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            maxRedirs: 2
+          }
+        }],
+        [`curl ${url} --max-time 2`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            timeout: 2
+          }
+        }],
+        [`curl ${url} --raw`, {
+          url,
+          method: 'GET',
+          headers: '',
+          config: {
+            disableResponseParsing: true
+          }
+        }],
+        [`curl ${url} --referer "me"`, {
+          url,
+          method: 'GET',
+          headers: 'referer: me',
+          config: {}
+        }],
+        [`curl ${url} --tr-encoding`, {
+          url,
+          method: 'GET',
+          headers: 'accept-encoding: deflate, gzip, br',
+          config: {}
+        }],
+        [`curl ${url} --user-agent "x-test"`, {
+          url,
+          method: 'GET',
+          headers: 'user-agent: x-test',
+          config: {}
+        }]
+      ].forEach((item, index) => {
+        test('Command #' + (index + 1), () => {
+          const result = element.generate(item[0]);
+          assert.deepEqual(result, item[1]);
+        });
+      });
+    });
   });
   </script>
 </body>

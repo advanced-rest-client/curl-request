@@ -289,6 +289,8 @@
       const v = item.value;
       switch (item.name) {
         case 'user-agent':
+          this._replaceHeader(target.headers, item.name, v);
+          break;
         case 'cookie':
           this._appendHeader(target.headers, item.name, v);
           break;
@@ -337,13 +339,15 @@
           target.config.validateCertificates = false;
           break;
         case 'key':
-          target.config.key = v;
+          this._addSslConfig(target, item.name, v);
           break;
         case 'key-type':
-          target.config.keyType = v;
+          this._addSslConfig(target, 'keyType', v);
           break;
         case 'max-redirs':
-          target.config.maxRedirs = v;
+          if (!isNaN(v)) {
+            target.config.maxRedirs = Number(v);
+          }
           break;
         case 'max-time':
           if (!isNaN(v)) {
@@ -351,7 +355,7 @@
           }
           break;
         case 'raw':
-          target.config.timeout = Number(v);
+          target.config.disableResponseParsing = true;
           break;
         case 'referer':
           this._replaceHeader(target.headers, 'referer', v);
@@ -360,7 +364,7 @@
           target.method = v;
           break;
         case 'tr-encoding':
-          this._replaceHeader(target.headers, 'Accept-Encoding', 'deflate, gzip, br');
+          this._replaceHeader(target.headers, 'accept-encoding', 'deflate, gzip, br');
           break;
         case 'url':
           target.url = v;
@@ -376,6 +380,18 @@
           }
           break;
       }
+    }
+    /**
+     * Adds "ssl" section to the configuration with property and value.
+     * @param {Object} target ARC request object
+     * @param {String} property Name of the property to add
+     * @param {any} value Value of the property
+     */
+    _addSslConfig(target, property, value) {
+      if (!target.config.ssl) {
+        target.config.ssl = {};
+      }
+      target.config.ssl[property] = value;
     }
     /**
      * Processes user input string. It can be just a username or `username:password`
@@ -426,7 +442,7 @@
       } else {
         const name = value.substr(0, index);
         value = value.substr(index + 1).trim();
-        this._replaceHeader(headers, name, value);
+        this._appendHeader(headers, name, value);
       }
     }
     /**
@@ -577,21 +593,22 @@
       }
       if (multipart && multipart.length) {
         multipart.forEach((item) => {
-          if (url[url - 1] !== '?' && url[url - 1] !== '&') {
+          if (url[url.length - 1] !== '?' && url[url.length - 1] !== '&') {
             url += '&';
           }
           url += item.name + '=' + item.value;
         });
       } else if (payload && payload.length) {
         if (payload.indexOf('=') !== -1) {
-          if (url[url - 1] !== '?' && url[url - 1] !== '&') {
+          if (url[url.length - 1] !== '?' && url[url.length - 1] !== '&') {
             url += '&';
           }
           url += payload;
         }
       }
       request.url = url;
-      request.multipart = multipart.payload = undefined;
+      delete request.multipart;
+      delete request.payload;
     }
   }
   window.customElements.define(CurlRequest.is, CurlRequest);
