@@ -45,6 +45,9 @@
      * @return {Object} ARC request object
      */
     generate(value) {
+      // When using `--get` option all `payload` params should be passed to
+      // query parameters
+      this.payloadToGet = false;
       const result = {
         method: 'GET',
         headers: [],
@@ -55,7 +58,7 @@
       result.url = opts.url;
       const options = this._canonicalOptions(opts.options);
       this._processOptions(options, result);
-      this._processHeadersPost(result);
+      this._postProcess(result);
       return result;
     }
     /**
@@ -211,19 +214,22 @@
         'd': 'data',
         'D': 'dump-header',
         'E': 'cert',
+        'e': 'referer',
         'F': 'form',
+        'G': 'get',
+        'H': 'header',
+        'I': 'head',
         'k': 'insecure',
+        'L': 'location',
         'm': 'max-time',
         'o': 'output',
         'O': 'remote-name',
         's': 'silent',
         'T': 'upload-file',
-        'I': 'head',
         'u': 'user',
         'w': 'write-out',
         'x': 'proxy',
-        'H': 'header',
-        'L': 'location',
+        'X': 'request',
         'v': 'verbose'
       };
     }
@@ -256,9 +262,23 @@
       }
       return opts;
     }
-
+    /**
+     * Processes recognized options.
+     * @param {Array<Object>} options List of parsed options
+     * @param {Object} target Request object
+     */
     _processOptions(options, target) {
       options.forEach((item) => this._addOption(item, target));
+    }
+    /**
+     * Operations to perform when options has been parsed and set on the request.
+     * @param {Object} request ARC request object
+     */
+    _postProcess(request) {
+      if (this.payloadToGet) {
+        this._appendPayloadToGet(request);
+      }
+      this._processHeadersPost(request);
     }
     /**
      * Applies an option to the request object.
@@ -297,24 +317,154 @@
           this._replaceHeader(target.headers, 'content-type', 'application/x-www-form-urlencoded');
           break;
         case 'digest':
-          target.auth = {
-            type: 'digest'
-          };
+          this._addAuthProperty(target, 'type', 'digest');
           break;
         case 'form':
-          this._appendMultipart(target);
+          target.config.expectFilePayload = true;
+          this._appendMultipart(v, target);
+          break;
+        case 'get':
+          target.method = 'GET';
+          this.payloadToGet = true;
+          break;
+        case 'head':
+          target.method = 'HEAD';
+          break;
+        case 'header':
+          this._appendHeaderString(target.headers, v);
+          break;
+        case 'insecure':
+          target.config.validateCertificates = false;
+          break;
+        case 'key':
+          target.config.key = v;
+          break;
+        case 'key-type':
+          target.config.keyType = v;
+          break;
+        case 'max-redirs':
+          target.config.maxRedirs = v;
+          break;
+        case 'max-time':
+          if (!isNaN(v)) {
+            target.config.timeout = Number(v);
+          }
+          break;
+        case 'raw':
+          target.config.timeout = Number(v);
+          break;
+        case 'referer':
+          this._replaceHeader(target.headers, 'referer', v);
+          break;
+        case 'request':
+          target.method = v;
+          break;
+        case 'tr-encoding':
+          this._replaceHeader(target.headers, 'Accept-Encoding', 'deflate, gzip, br');
+          break;
+        case 'url':
+          target.url = v;
+          break;
+        case 'user-agent':
+          this._replaceHeader(target.headers, 'user-agent', v);
+          break;
+        case 'user':
+          const values = this._processUser(v);
+          this._addAuthProperty(target, 'username', values.username);
+          if (values.password) {
+            this._addAuthProperty(target, 'password', values.password);
+          }
           break;
       }
     }
-
+    /**
+     * Processes user input string. It can be just a username or `username:password`
+     * @param {String} value A value to parse
+     * @return {Object} Object with `username` and optional `password` properties.
+     */
+    _processUser(value) {
+      const parts = value.split(':');
+      const result = {
+        username: parts[0]
+      };
+      if (parts[1]) {
+        result.password = parts[1];
+      }
+      return result;
+    }
+    /**
+     * Adds additional property to `auth` object.
+     * @param {String} target ARC request
+     * @param {String} name Name of the proeprty
+     * @param {any} value Value to pass.
+     */
+    _addAuthProperty(target, name, value) {
+      if (!target.auth) {
+        target.auth = {};
+      }
+      target.auth[name] = value;
+    }
+    /**
+     * Appends header from the header string.
+     * @param {Array} headers List of headers in the request object
+     * @param {String} value Header value to be parsed.
+     */
+    _appendHeaderString(headers, value) {
+      if (!value) {
+        return;
+      }
+      const index = value.indexOf(':');
+      if (index === -1) {
+        if (value.indexOf(';') !== -1) {
+          this._replaceHeader(headers, value, '');
+          return;
+        } else {
+          this._removeHeader(headers, value);
+        }
+      } else {
+        const name = value.substr(0, index);
+        value = value.substr(index + 1);
+        this._replaceHeader(headers, name, value);
+      }
+    }
+    /**
+     * Removes a header from the list.
+     * @param {Array} headers List of headers in the request object
+     * @param {String} name Header name
+     */
+    _removeHeader(headers, name) {
+      for (let i = 0, len = headers.length; i < len; i++) {
+        if (headers[i][0].toLowerCase() === name.toLowerCase()) {
+          headers.splice(i, 1);
+          return;
+        }
+      }
+    }
+    /**
+     * Adds/replaces value of the header.
+     * @param {Array} headers List of headers in the request object
+     * @param {String} name Header name
+     * @param {String} value Header value
+     */
     _replaceHeader(headers, name, value) {
       this.__updateHeader(headers, name, value, true);
     }
-
+    /**
+     * Adds/appends value of the header.
+     * @param {Array} headers List of headers in the request object
+     * @param {String} name Header name
+     * @param {String} value Header value
+     */
     _appendHeader(headers, name, value) {
       this.__updateHeader(headers, name, value);
     }
-
+    /**
+     * Updates value of the header.
+     * @param {Array} headers List of headers in the request object
+     * @param {String} name Header name
+     * @param {String} value Header value
+     * @param {Boolean} override If set it replaces header instead of appending its value
+     */
     __updateHeader(headers, name, value, override) {
       for (let i = 0, len = headers.length; i < len; i++) {
         if (headers[i][0].toLowerCase() === name.toLowerCase()) {
@@ -361,11 +511,81 @@
       }
       return target + encodeURIComponent(value);
     }
-
-    _appendMultipart(target) {
+    /**
+     * Adds `multipart` property on the target with ARC's definition of
+     * a multipart object.
+     * See https://github.com/advanced-rest-client/api-components-api/blob/
+     * master/docs/arc-models.md#arcmultipartitem
+     * @param {String} value Command value
+     * @param {Object} target Request object
+     */
+    _appendMultipart(value, target) {
       if (!target.multipart) {
         target.multipart = [];
       }
+      const index = value.indexOf('=');
+      if (index === -1) {
+        return;
+      }
+      const name = value.substr(0, index);
+      let valuePart = value.substr(index + 1);
+      let readFileAsText = valuePart[0] === '<';
+      let isLocalFile = readFileAsText || valuePart[0] === '@';
+      if (isLocalFile) {
+        valuePart = valuePart.substr(1);
+      }
+      const index2 = valuePart.indexOf(';');
+      let type;
+      if (index2 !== -1) {
+        type = valuePart.substr(index2 + 1).trim();
+        valuePart = valuePart(0, index2);
+        if (type.indexOf('type=') === 0) {
+          type = type.substr(5);
+        }
+      }
+      target.multipart.push({
+        name,
+        value: valuePart,
+        type,
+        isLocalFile,
+        isFile: isLocalFile && !readFileAsText,
+        readFileAsText,
+        isTextBlob: readFileAsText && !!type
+      });
+    }
+    /**
+     * Moces all payload / multipart collected data to the URL
+     * @param {Object} request
+     */
+    _appendPayloadToGet(request) {
+      const {multipart, payload} = request;
+      if (!multipart && !payload) {
+        return;
+      }
+      let url = request.url;
+      if (!url) {
+        url = '';
+      }
+      if (url.indexOf('?') === -1) {
+        url += '?';
+      }
+      if (multipart && multipart.length) {
+        multipart.forEach((item) => {
+          if (url[url - 1] !== '?' && url[url - 1] !== '&') {
+            url += '&';
+          }
+          url += item.name + '=' + item.value;
+        });
+      } else if (payload && payload.length) {
+        if (payload.indexOf('=') !== -1) {
+          if (url[url - 1] !== '?' && url[url - 1] !== '&') {
+            url += '&';
+          }
+          url += payload;
+        }
+      }
+      request.url = url;
+      request.multipart = multipart.payload = undefined;
     }
   }
   window.customElements.define(CurlRequest.is, CurlRequest);
