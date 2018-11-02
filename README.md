@@ -6,21 +6,10 @@
 
 A component that transforms cURL command to ARC request object
 
-<!---
-```
-<custom-element-demo>
-  <template>
-    <link rel="import" href="curl-request.html">
-    <next-code-block></next-code-block>
-  </template>
-</custom-element-demo>
-```
--->
-
 ```html
-<curl-request></curl-request>
+<curl-request command="curl &#34;http://www.tutorialspoint.com/unix/&#34; -X GET -h accept: &#34;*/*&#34;"></curl-request>
 ```
 
 ### API components
 
-This components is a part of API components ecosystem: https://elements.advancedrestclient.com/
+This components is a part of [API components ecosystem](https://elements.advancedrestclient.com/)
